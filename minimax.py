@@ -78,7 +78,7 @@ def minimax(board, depth, alpha, beta, maximizer, player):
 
 def move_minimax(board, player):
     """Makes a move using the minimax algorithm with alpha-beta pruning."""
-    print('AI is thinking...')
+    print('AI (minimax) is thinking...')
     _, best_move = minimax(board, 1, float('-inf'), float('inf'), True, player)
     if best_move is None:
         raise Exception('AI cannot make a move')

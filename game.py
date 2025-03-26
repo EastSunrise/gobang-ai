@@ -10,8 +10,9 @@ WIN_SIZE = 5
 
 EMPTY = 0
 PLAYER_ONE = 1
-PLAYER_TWO = 2
+PLAYER_TWO = -1
 SYMBOLS = ['.', 'X', 'O']
+DIRECTIONS = [(0, 1), (1, 0), (1, 1), (1, -1)]
 
 
 def create_board(size=SIZE):
@@ -45,9 +46,6 @@ def count_consecutive(board, row, col, player, dr, dc):
         r += dr
         c += dc
     return count
-
-
-DIRECTIONS = [(0, 1), (1, 0), (1, 1), (1, -1)]
 
 
 def check_win(board, row, col, player):
