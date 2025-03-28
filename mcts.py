@@ -5,6 +5,9 @@ Monte Carlo Tree Search algorithm to find the best move.
 
 @author: Kingen
 """
+import heapq
+import random
+import time
 
 from game import *
 
@@ -31,14 +34,12 @@ def get_possible_moves_bounding_box(board: ndarray, margin=2):
 def get_possible_moves_radius(board, radius=2):
     """Returns empty positions within a radius of occupied cells."""
     moves = set()
-    for r in range(SIZE):
-        for c in range(SIZE):
-            if board[r][c] != EMPTY:
-                for dr in range(-radius, radius + 1):
-                    for dc in range(-radius, radius + 1):
-                        nr, nc = r + dr, c + dc
-                        if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] == EMPTY:
-                            moves.add((nr, nc))
+    for r, c in np.argwhere(board != EMPTY):
+        for dr in range(-radius, radius + 1):
+            for dc in range(-radius, radius + 1):
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr, nc] == EMPTY:
+                    moves.add((nr, nc))
     return list(moves)
 
 
@@ -71,7 +72,7 @@ def heuristic_score(board, move, player, weight_center=1.0, weight_offensive=10.
         defensive_total += opp_count1 + opp_count2
 
     offensive_bonus = offensive_total ** 2
-    defensive_bonus = offensive_total ** 2
+    defensive_bonus = defensive_total ** 2
 
     return weight_center * center_score + weight_offensive * offensive_bonus - weight_defensive * defensive_bonus
 
@@ -79,8 +80,7 @@ def heuristic_score(board, move, player, weight_center=1.0, weight_offensive=10.
 def get_expandable_moves(board, player, margin=2, topn=30):
     """Generate moves within a bounding box, score them with multiple heuristics, and return the top N moves."""
     moves = get_possible_moves_bounding_box(board, margin=margin)
-    moves.sort(key=lambda x: heuristic_score(board, x, player), reverse=True)
-    return moves[:topn]
+    return heapq.nlargest(topn, moves, key=lambda x: heuristic_score(board, x, player))
 
 
 class Node:
@@ -93,7 +93,13 @@ class Node:
         self.wins = 0
         self.visits = 0
         self.children = []
-        self.untried_moves = get_expandable_moves(board, player)  # untried children (moves)
+        self.__untried_moves = None
+
+    @property
+    def untried_moves(self):
+        if self.__untried_moves is None:
+            self.__untried_moves = get_expandable_moves(self.board, self.player)  # untried children (moves)
+        return self.__untried_moves
 
     def uct_value(self, exploration=1.414):
         """Calculates the UCT (Upper Confidence Bound for Trees) value of this node."""
@@ -108,6 +114,8 @@ class Node:
 
     def expand(self):
         """Expands one of the untried moves."""
+        if not self.untried_moves:
+            return None
         move = self.untried_moves.pop()
         next_board = self.board.copy()
         next_board[move[0], move[1]] = self.player
@@ -120,11 +128,10 @@ class Node:
         board = self.board.copy()
         current_player = self.player
         while True:
-            empties = np.argwhere(board == EMPTY)
-            if empties.size == 0:
+            candidates = get_possible_moves_radius(board, radius=2)
+            if not candidates:
                 return 0  # draw
-            idx = np.random.choice(len(empties))
-            row, col = tuple(empties[idx])
+            row, col = random.choice(candidates)
             board[row, col] = current_player
             if check_win(board, row, col, current_player):
                 return 1 if current_player == self.player else -1
@@ -132,10 +139,12 @@ class Node:
 
     def backpropagation(self, result):
         """Updates the wins and visits of this node and its ancestors."""
-        self.wins += result
-        self.visits += 1
-        if self.parent:
-            self.parent.backpropagation(-result)
+        node = self
+        while node:
+            node.wins += result
+            node.visits += 1
+            result = -result
+            node = node.parent
 
     def best_move(self):
         """Returns the move with the highest number of visits."""
@@ -169,8 +178,12 @@ def mcts(board: ndarray, player, iterations=1000):
 
 def move_mcts(board, player):
     """Makes a move using the mcts algorithm."""
-    print('AI (mcts) is thinking...')
-    return mcts(board, player, 1000)
+    print('AI (mcts) is thinking...', end='')
+    start = time.time()
+    move = mcts(board, player, 1000)
+    cost = time.time() - start
+    print(f' (cost {cost:.2f} seconds)')
+    return move
 
 
 if __name__ == '__main__':
