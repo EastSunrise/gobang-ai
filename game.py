@@ -5,6 +5,10 @@ Basic implementation of the game Gobang.
 
 @author: Kingen
 """
+import numpy as np
+from numpy import ndarray
+from scipy.signal import convolve2d
+
 SIZE = 15
 WIN_SIZE = 5
 
@@ -13,47 +17,57 @@ PLAYER_ONE = 1
 PLAYER_TWO = -1
 SYMBOLS = ['.', 'X', 'O']
 DIRECTIONS = [(0, 1), (1, 0), (1, 1), (1, -1)]
+KERNELS = [
+    np.ones((1, WIN_SIZE), dtype=np.int8),
+    np.ones((WIN_SIZE, 1), dtype=np.int8),
+    np.eye(WIN_SIZE, dtype=np.int8),
+    np.fliplr(np.eye(WIN_SIZE, dtype=np.int8))
+]
 
 
-def create_board(size=SIZE):
+def create_board() -> ndarray:
     """Creates an empty board with the given size."""
-    return [[EMPTY for _ in range(size)] for _ in range(size)]
+    return np.full((SIZE, SIZE), EMPTY, dtype=np.int8)
 
 
-HEADER = "   " + " ".join(f"{i:2}" for i in range(SIZE))
-
-
-def print_board(board):
+def print_board(board: ndarray):
     """Prints the board to the console for visualization."""
-    print(HEADER)
+    print("   " + " ".join(f"{i:2}" for i in range(SIZE)))
     for i in range(SIZE):
         print(f'{i:2}  ' + '  '.join(SYMBOLS[cell] for cell in board[i]))
 
 
-def is_valid_move(board, row, col):
+def is_valid_move(board: ndarray, row, col):
     """Checks if the given position is a valid move."""
-    if 0 <= row < SIZE and 0 <= col < SIZE:
-        return board[row][col] == EMPTY
-    return False
+    return 0 <= row < SIZE and 0 <= col < SIZE and board[row, col] == EMPTY
 
 
-def count_consecutive(board, row, col, player, dr, dc):
+def count_consecutive(board: ndarray, row, col, player, dr, dc):
     """Counts consecutive pieces for a player starting from (row, col) in a given direction."""
     count = 0
-    r, c = row, col
-    while 0 <= r < SIZE and 0 <= c < SIZE and board[r][c] == player:
+    while 0 <= row < SIZE and 0 <= col < SIZE and board[row, col] == player:
         count += 1
-        r += dr
-        c += dc
+        row += dr
+        col += dc
     return count
 
 
-def check_win(board, row, col, player):
+def check_win(board: ndarray, row, col, player):
     """Checks if placing a piece at (row, col) by the player results in a win."""
     for dr, dc in DIRECTIONS:
         count = (count_consecutive(board, row, col, player, dr, dc) +
                  count_consecutive(board, row, col, player, -dr, -dc) - 1)
         if count >= WIN_SIZE:
+            return True
+    return False
+
+
+def check_win_convolution(board: ndarray, player):
+    """Checks if placing a piece at (row, col) by the player results in a win using 2D convolution."""
+    player_board = (board == player).astype(np.int8)
+    for kernel in KERNELS:
+        conv_result: ndarray = convolve2d(player_board, kernel, mode='valid')
+        if np.any(conv_result >= WIN_SIZE):
             return True
     return False
 
@@ -85,11 +99,11 @@ def game_loop(move_one, move_two):
         else:
             row, col = move_two(board, player)
 
-        board[row][col] = player
+        board[row, col] = player
         move_count += 1
         print_board(board)
 
-        if check_win(board, row, col, player):
+        if check_win_convolution(board, player):
             print(f"Player {player} wins!")
             break
         player = PLAYER_TWO if player == PLAYER_ONE else PLAYER_ONE

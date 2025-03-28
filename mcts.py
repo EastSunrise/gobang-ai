@@ -5,45 +5,41 @@ Monte Carlo Tree Search algorithm to find the best move.
 
 @author: Kingen
 """
-import copy
-import math
-import random
 
 from game import *
 
 CENTER = SIZE // 2
 
 
-def get_possible_moves_bounding_box(board, margin=2):
+def get_possible_moves_bounding_box(board: ndarray, margin=2):
     """Returns empty positions within the bounding box of occupied cells extended by a margin."""
-    min_r, min_c = SIZE, SIZE
-    max_r, max_c = 0, 0
+    occupied = np.nonzero(board != EMPTY)
+    if occupied[0].size == 0:
+        # empty board
+        return [(r, c) for r in range(SIZE) for c in range(SIZE)]
 
-    # Find bounds of occupied cells.
+    min_r = max(0, occupied[0].min() - margin)
+    max_r = min(SIZE - 1, occupied[0].max() + margin)
+    min_c = max(0, occupied[1].min() - margin)
+    max_c = min(SIZE - 1, occupied[1].max() + margin)
+
+    sub_board = board[min_r:max_r + 1, min_c:max_c + 1]
+    empties = np.argwhere(sub_board == EMPTY)
+    return [(r + min_r, c + min_c) for r, c in empties]
+
+
+def get_possible_moves_radius(board, radius=2):
+    """Returns empty positions within a radius of occupied cells."""
+    moves = set()
     for r in range(SIZE):
         for c in range(SIZE):
             if board[r][c] != EMPTY:
-                min_r = min(min_r, r)
-                max_r = max(max_r, r)
-                min_c = min(min_c, c)
-                max_c = max(max_c, c)
-
-    # If board is empty, return all positions.
-    if min_r == SIZE:
-        return [(r, c) for r in range(SIZE) for c in range(SIZE)]
-
-    # Extend the bounding box by a margin.
-    min_r = max(0, min_r - margin)
-    min_c = max(0, min_c - margin)
-    max_r = min(SIZE - 1, max_r + margin)
-    max_c = min(SIZE - 1, max_c + margin)
-
-    moves = []
-    for r in range(min_r, max_r + 1):
-        for c in range(min_c, max_c + 1):
-            if board[r][c] == EMPTY:
-                moves.append((r, c))
-    return moves
+                for dr in range(-radius, radius + 1):
+                    for dc in range(-radius, radius + 1):
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < SIZE and 0 <= nc < SIZE and board[nr][nc] == EMPTY:
+                            moves.add((nr, nc))
+    return list(moves)
 
 
 def count_max_consecutive(board, move, player):
@@ -63,18 +59,24 @@ def heuristic_score(board, move, player, weight_center=1.0, weight_offensive=10.
     row, col = move
     center_score = - abs(CENTER - col) - abs(CENTER - row)
 
-    # todo consider contributing to consecutive pieces in more than one directions
-    offensive_count = count_max_consecutive(board, move, player)
-    offensive_bonus = 10 ** offensive_count if offensive_count > 0 else 0
-
+    offensive_total, defensive_total = 0, 0
     opponent = PLAYER_TWO if player == PLAYER_ONE else PLAYER_ONE
-    defensive_count = count_max_consecutive(board, move, opponent)
-    defensive_bonus = 10 ** defensive_count if defensive_count > 0 else 0
+    for dr, dc in DIRECTIONS:
+        count1 = count_consecutive(board, row + dr, col + dc, player, dr, dc)
+        count2 = count_consecutive(board, row - dr, col - dc, player, -dr, -dc)
+        offensive_total += count1 + count2
+
+        opp_count1 = count_consecutive(board, row + dr, col + dc, opponent, dr, dc)
+        opp_count2 = count_consecutive(board, row - dr, col - dc, opponent, -dr, -dc)
+        defensive_total += opp_count1 + opp_count2
+
+    offensive_bonus = offensive_total ** 2
+    defensive_bonus = offensive_total ** 2
 
     return weight_center * center_score + weight_offensive * offensive_bonus - weight_defensive * defensive_bonus
 
 
-def get_possible_moves(board, player, margin=2, topn=30):
+def get_expandable_moves(board, player, margin=2, topn=30):
     """Generate moves within a bounding box, score them with multiple heuristics, and return the top N moves."""
     moves = get_possible_moves_bounding_box(board, margin=margin)
     moves.sort(key=lambda x: heuristic_score(board, x, player), reverse=True)
@@ -82,7 +84,7 @@ def get_possible_moves(board, player, margin=2, topn=30):
 
 
 class Node:
-    def __init__(self, board, parent=None, move=None, player=PLAYER_ONE):
+    def __init__(self, board: ndarray, parent=None, move=None, player=PLAYER_ONE):
         self.board = board
         self.parent: Node = parent
         self.move = move  # the move that led to this node
@@ -91,18 +93,14 @@ class Node:
         self.wins = 0
         self.visits = 0
         self.children = []
-        self.untried_moves = get_possible_moves(board, player)  # untried children (moves)
-        self.utc = None
+        self.untried_moves = get_expandable_moves(board, player)  # untried children (moves)
 
     def uct_value(self, exploration=1.414):
         """Calculates the UCT (Upper Confidence Bound for Trees) value of this node."""
-        if self.utc is None:
-            if self.visits == 0:
-                self.utc = float('inf')
-            else:
-                parent_visits = self.parent.visits if self.parent else 1
-                self.utc = self.wins / self.visits + exploration * math.sqrt(math.log(parent_visits) / self.visits)
-        return self.utc
+        if self.visits == 0:
+            return float('inf')
+        parent_visits = self.parent.visits if self.parent else 1
+        return self.wins / self.visits + exploration * np.sqrt(np.log(parent_visits) / self.visits)
 
     def select(self):
         """Selects the child node with the highest UCT value."""
@@ -111,33 +109,31 @@ class Node:
     def expand(self):
         """Expands one of the untried moves."""
         move = self.untried_moves.pop()
-        next_board = copy.deepcopy(self.board)
-        next_board[move[0]][move[1]] = self.player
+        next_board = self.board.copy()
+        next_board[move[0], move[1]] = self.player
         child_node = Node(next_board, parent=self, move=move, player=self.opponent)
         self.children.append(child_node)
         return child_node
 
-    def simulate_random(self):
-        """
-        Simulates a random play-out from this node.
-        :return: the result of the simulation (-1, 0, or 1)
-        """
-        board = copy.deepcopy(self.board)
+    def simulate(self):
+        """Simulates a random play-out using weighted random move selection."""
+        board = self.board.copy()
         current_player = self.player
-        moves = get_possible_moves_bounding_box(board, margin=5)
-        while moves:
-            row, col = moves.pop(int(len(moves) * random.random()))
-            board[row][col] = current_player
+        while True:
+            empties = np.argwhere(board == EMPTY)
+            if empties.size == 0:
+                return 0  # draw
+            idx = np.random.choice(len(empties))
+            row, col = tuple(empties[idx])
+            board[row, col] = current_player
             if check_win(board, row, col, current_player):
                 return 1 if current_player == self.player else -1
             current_player = PLAYER_TWO if current_player == PLAYER_ONE else PLAYER_ONE
-        return 0  # draw
 
     def backpropagation(self, result):
         """Updates the wins and visits of this node and its ancestors."""
         self.wins += result
         self.visits += 1
-        self.utc = None
         if self.parent:
             self.parent.backpropagation(-result)
 
@@ -146,15 +142,15 @@ class Node:
         return max(self.children, key=lambda c: c.visits).move
 
 
-def mcts(board, player, iterations=1000):
+def mcts(board: ndarray, player, iterations=1000):
     """Runs MCTS starting from the given board state and player."""
-    root_node = Node(copy.deepcopy(board), player=player)
+    root_node = Node(board.copy(), player=player)
 
     for _ in range(iterations):
         node = root_node
 
         # selection: traverse the tree using UCT until a node with untried moves is reached
-        while node.untried_moves == [] and node.children:
+        while not node.untried_moves and node.children:
             node = node.select()
 
         # expansion: expand one of the untried moves if the node is not terminal
@@ -162,7 +158,7 @@ def mcts(board, player, iterations=1000):
             node = node.expand()
 
         # simulation: simulate a random play-out from the expanded node's state
-        result = node.simulate_random()
+        result = node.simulate()
 
         # backpropagation: update the wins and visits of all nodes in the path from the root to the expanded node
         node.backpropagation(result)

@@ -5,11 +5,13 @@ Minimax algorithm with alpha-beta pruning to find the best move.
 
 @author: Kingen
 """
+from numpy import ndarray
+
 from evaluation import eval_board, WIN_SCORE
 from game import SIZE, is_valid_move, check_win, EMPTY, PLAYER_ONE, PLAYER_TWO, game_loop
 
 
-def minimax(board, depth, alpha, beta, maximizer, player):
+def minimax(board: ndarray, depth, alpha, beta, maximizer, player):
     """
     Minimax algorithm with alpha-beta pruning.
     :param board: current board state
@@ -31,21 +33,21 @@ def minimax(board, depth, alpha, beta, maximizer, player):
     for row in range(SIZE):
         for col in range(SIZE):
             if is_valid_move(board, row, col):
-                board[row][col] = player if maximizer else opponent
+                board[row, col] = player if maximizer else opponent
                 # use a shallow evaluation to order moves
                 score = eval_board(board, player)
                 moves.append((row, col, score))
-                board[row][col] = EMPTY
+                board[row, col] = EMPTY
     moves.sort(key=lambda x: x[2], reverse=maximizer)
 
     if maximizer:
         max_score = float('-inf')
         for row, col, _ in moves:
-            board[row][col] = player  # make move
+            board[row, col] = player  # make move
             if check_win(board, row, col, player):
                 return WIN_SCORE, (row, col)
             eval_score, _ = minimax(board, depth - 1, alpha, beta, False, player)
-            board[row][col] = EMPTY  # undo move
+            board[row, col] = EMPTY  # undo move
 
             if eval_score > max_score:
                 max_score = eval_score
@@ -59,11 +61,11 @@ def minimax(board, depth, alpha, beta, maximizer, player):
     else:
         min_score = float('inf')
         for row, col, _ in moves:
-            board[row][col] = opponent  # make move
+            board[row, col] = opponent  # make move
             if check_win(board, row, col, opponent):
                 return -WIN_SCORE, (row, col)
             eval_score, _ = minimax(board, depth - 1, alpha, beta, True, player)
-            board[row][col] = EMPTY  # undo move
+            board[row, col] = EMPTY  # undo move
 
             if eval_score < min_score:
                 min_score = eval_score
