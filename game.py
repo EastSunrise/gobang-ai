@@ -93,8 +93,11 @@ def game_loop(move_one, move_two):
 
         if check_win(board, row, col, player):
             print(f"Player {player} wins!")
-            break
+            return player
         player = PLAYER_TWO if player == PLAYER_ONE else PLAYER_ONE
+
+    print("It's a draw!")
+    return EMPTY
 
 
 if __name__ == '__main__':

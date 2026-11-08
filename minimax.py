@@ -6,7 +6,7 @@ Minimax algorithm with alpha-beta pruning to find the best move.
 @author: Kingen
 """
 from evaluation import eval_board, WIN_SCORE
-from game import SIZE, is_valid_move, check_win, EMPTY, PLAYER_ONE, PLAYER_TWO, game_loop
+from game import SIZE, is_valid_move, check_win, EMPTY, PLAYER_ONE, PLAYER_TWO, game_loop, move_manual
 
 
 def minimax(board, depth, alpha, beta, maximizer, player):
@@ -43,6 +43,7 @@ def minimax(board, depth, alpha, beta, maximizer, player):
         for row, col, _ in moves:
             board[row][col] = player  # make move
             if check_win(board, row, col, player):
+                board[row][col] = EMPTY  # undo move
                 return WIN_SCORE, (row, col)
             eval_score, _ = minimax(board, depth - 1, alpha, beta, False, player)
             board[row][col] = EMPTY  # undo move
@@ -61,6 +62,7 @@ def minimax(board, depth, alpha, beta, maximizer, player):
         for row, col, _ in moves:
             board[row][col] = opponent  # make move
             if check_win(board, row, col, opponent):
+                board[row][col] = EMPTY  # undo move
                 return -WIN_SCORE, (row, col)
             eval_score, _ = minimax(board, depth - 1, alpha, beta, True, player)
             board[row][col] = EMPTY  # undo move
@@ -86,4 +88,4 @@ def move_minimax(board, player):
 
 
 if __name__ == '__main__':
-    game_loop(move_minimax, move_minimax)
+    game_loop(move_manual, move_minimax)
