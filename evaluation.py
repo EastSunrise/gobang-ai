@@ -5,6 +5,8 @@ Functions for evaluating the board state.
 
 @author: Kingen
 """
+from numpy import ndarray
+
 from game import WIN_SIZE, EMPTY, SIZE, PLAYER_ONE, PLAYER_TWO
 
 SCORES = [
@@ -47,27 +49,27 @@ def eval_line(get_value, length, player):
     return score
 
 
-def eval_row(board, r, player):
+def eval_row(board: ndarray, r, player):
     """Evaluates a single row for segments of the player's pieces."""
-    return eval_line(lambda i: board[r][i], SIZE, player)
+    return eval_line(lambda i: board[r, i], SIZE, player)
 
 
-def eval_col(board, c, player):
+def eval_col(board: ndarray, c, player):
     """Evaluates a single column for segments of the player's pieces."""
-    return eval_line(lambda i: board[i][c], SIZE, player)
+    return eval_line(lambda i: board[i, c], SIZE, player)
 
 
-def eval_slash(board, r, c, length, player):
+def eval_slash(board: ndarray, r, c, length, player):
     """Evaluates a single slash diagonal for segments of the player's pieces."""
-    return eval_line(lambda i: board[r - i][c + i], length, player)
+    return eval_line(lambda i: board[r - i, c + i], length, player)
 
 
-def eval_backslash(board, r, c, length, player):
+def eval_backslash(board: ndarray, r, c, length, player):
     """Evaluates a single backslash diagonal for segments of the player's pieces."""
-    return eval_line(lambda i: board[r + i][c + i], length, player)
+    return eval_line(lambda i: board[r + i, c + i], length, player)
 
 
-def eval_board(board, player):
+def eval_board(board: ndarray, player):
     """Evaluates the board for the perspective of the given player."""
     opponent = PLAYER_ONE if player == PLAYER_TWO else PLAYER_TWO
     score = 0
